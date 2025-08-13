@@ -181,5 +181,5 @@ if __name__=="__main__":
         goal=input("\nGoal> ").strip()
         if not goal: continue
         state: State = {"goal": goal, "context": [], "decision": {}, "log": []}
-        out = app.invoke(state)
+        out = app.invoke(state, config={"configurable": {"thread_id": "cli-session"}})
         print(json.dumps({"decision": out.get("decision",{}), "log": out.get("log",[])}, indent=2))

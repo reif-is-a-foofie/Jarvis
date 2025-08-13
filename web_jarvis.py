@@ -54,7 +54,8 @@ def process_jarvis_goal(goal, chat_id):
         
         # Execute through Jarvis LangGraph
         state = State(goal=goal, context=[], decision={}, log=[])
-        result = jarvis_app.invoke(state)
+        # Provide a checkpointer thread_id using the Telegram chat as the thread key
+        result = jarvis_app.invoke(state, config={"configurable": {"thread_id": str(chat_id)}})
         
         # Format response
         decision = result.get("decision", {})
