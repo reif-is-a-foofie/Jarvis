@@ -13,6 +13,7 @@ MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL_SEC", "60"))
 MONITOR_FAIL_THRESHOLD = int(os.getenv("MONITOR_FAIL_THRESHOLD", "2"))
 _monitor_fail_count = 0
+ECHO_MODE = os.getenv("ECHO_MODE", "false").lower() == "true"
 
 # Telegram Bot Configuration and Auth
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -106,6 +107,11 @@ def process_jarvis_goal(goal, chat_id):
             ingest_text(f"user[{chat_id}]: {goal}", src="chat-user")
         except Exception:
             pass
+
+        # Fast-path echo for Hello-World validation
+        if ECHO_MODE:
+            send_telegram_message(f"👋 Hello! You said: {goal}", chat_id)
+            return
         
         # Execute through Jarvis LangGraph
         state = State(goal=goal, context=[], decision={}, log=[])
@@ -149,7 +155,10 @@ def process_jarvis_goal(goal, chat_id):
         error_msg = f"❌ *Error processing goal:*\n{str(e)}"
         METRICS["errors"] += 1
         METRICS["last_error"] = str(e)
-        send_telegram_message(error_msg, chat_id)
+        try:
+            send_telegram_message(error_msg, chat_id)
+        except Exception:
+            pass
 
 def get_telegram_updates(offset: int | None = None, timeout_seconds: int = 50):
     """Get new messages from Telegram"""
