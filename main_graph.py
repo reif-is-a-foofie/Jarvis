@@ -76,10 +76,24 @@ def topk(qry: str, k: int = 5):
 # LLM shim (OpenAI SDK JSON)
 
 def _get_openai_client():
-    # Support proxies via env; avoid passing unsupported args to httpx/OpenAI
+    # Robust proxy handling across OpenAI/httpx versions
     from openai import OpenAI
     proxy = os.getenv("OPENAI_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
     if proxy:
+        try:
+            import httpx  # type: ignore
+            # Try modern httpx
+            return OpenAI(http_client=httpx.Client(proxies=proxy, timeout=30.0))
+        except TypeError:
+            try:
+                # Some httpx variants use 'proxy' (singular)
+                import httpx  # type: ignore
+                return OpenAI(http_client=httpx.Client(proxy=proxy, timeout=30.0))
+            except Exception:
+                pass
+        except Exception:
+            pass
+        # Fallback to env vars if custom client construction failed
         os.environ.setdefault("HTTPS_PROXY", proxy)
         os.environ.setdefault("HTTP_PROXY", proxy)
     return OpenAI()
