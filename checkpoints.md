@@ -81,6 +81,27 @@ Implementation details required for full, self-building Jarvis
   - Rate limits and backoff on Telegram errors.
   - Structured replies: include decision type, tool results summary, and error traces when safe.
 
+Core Feature Sets (Built vs Planned)
+
+- Chat Interface (Telegram)
+  - Built: Webhook endpoint `/telegram/<token>` with `TELEGRAM_WEBHOOK_SECRET`; webhook auto-setup from `APP_BASE_URL`; NL boot greeting; commands `/start`, `/help`, `/status`, `/goal`; auth via `ALLOWED_CHAT_IDS`; health at `/health` with counters.
+  - Planned: Rate limiting/backoff; IP allowlist; `/cancel` semantics.
+- Workflow Engine
+  - Built: LangGraph PLAN→RETRIEVE→DECIDE→(ACT|SELF_UPGRADE)→FINAL; checkpointer with per-thread `thread_id` for Telegram and CLI.
+  - Planned: Postgres checkpointer when `DATABASE_URL` present.
+- Tools
+  - Built: `docs.write`, `notify.owner`, `compose.apply` (Heroku-sim), `ingest.source`, `archive.data` (stub), `track.finances`.
+  - Planned: Tool engine (dynamic tool creation); package management edits + deploy notify.
+- Retrieval/Memory
+  - Built: Embeddings bge-small; in-memory Qdrant by default; optional external Qdrant via `QDRANT_URL`/`QDRANT_API_KEY`.
+  - Planned: Archival policy and cold storage tagging.
+- LLM & Policy
+  - Built: OpenAI chat completions; proxy via httpx if env set; DECIDE prompt uses `allowed_actions` from manifesto; router enforces guardrails.
+  - Planned: Cost awareness and monthly budget tracking.
+- Observability & Impact
+  - Built: Health counters (decisions/actions/errors) in `/health`.
+  - Planned: Structured logs to `logs/` and periodic impact summaries.
+
 2) Checkpoints and persistence
 - Current: in-memory `MemorySaver` checkpointer + in-memory Qdrant.
 - Required:
@@ -119,19 +140,23 @@ Environment variables to add (do not commit values)
 - TELEGRAM_WEBHOOK_SECRET: Shared secret for webhook route
 
 Backlog TODOs (implementation-ready)
-- [ ] Telegram: add webhook endpoint `/telegram/<token>`; verify signature/secret; disable polling when webhook configured
-- [ ] Telegram: implement `/start`, `/help`, `/goal`, `/status`, `/cancel` handlers
-- [ ] Auth: support `ALLOWED_CHAT_IDS` list in addition to `TELEGRAM_CHAT_ID`
+- [x] Telegram: add webhook endpoint `/telegram/<token>`; verify secret; disable polling when webhook configured
+- [x] Telegram: implement `/start`, `/help`, `/goal`, `/status` handlers (partial; `/cancel` pending)
+- [x] Auth: support `ALLOWED_CHAT_IDS` list in addition to `TELEGRAM_CHAT_ID`
 - [ ] Checkpointer: add Postgres checkpointer when `DATABASE_URL` present; fallback to memory
-- [ ] Vectors: support external Qdrant when `QDRANT_URL` set; fallback to in-memory
-- [ ] Ingest: implement `tools/ingest.py` and `tools/ingest.yaml` (reads local file path only for now)
-- [x] Archive: implement `tools/archive.py` and `tools/archive.yaml` (tag records as archived)
+- [x] Vectors: support external Qdrant when `QDRANT_URL` set; fallback to in-memory
+- [x] Ingest: implement `tools/ingest.py` and `tools/ingest.yaml` (reads local file path)
+- [x] Archive: implement `tools/archive.py` and `tools/archive.yaml` (stub tag)
 - [x] Finances: implement `tools/track_finances.py` and YAML with minimal CSV ingest + sum by category
 - [ ] Tool engine: create `services/tool_engine.py` with `create_tool()` that writes files safely and reloads
 - [ ] Package mgmt: create `services/deps.py` with `propose_dependency_update()` that edits `requirements.txt`
-- [ ] DECIDE: extend allowed tool list in prompt after above tools are safe and tested
-- [ ] Observability: add structured logging to `logs/` and enrich `/health` with counters
+- [x] DECIDE: extend allowed tool list in prompt using `allowed_actions`
+- [ ] Observability: add structured logging to `logs/` (counters present in `/health`)
 - [ ] Impact: scheduled Telegram summary with impact ledger aggregates
+
+How to chat now
+- Open Telegram and message your Jarvis bot in natural language (no command required). Optionally use `/goal <text>`.
+- Webhook is active; replies should arrive in the chat. Use `/status` for quick metrics.
 
 Acceptance criteria
 - Bot accepts `/goal <text>` and returns a FINAL or ACT/SELF_UPGRADE status + action count

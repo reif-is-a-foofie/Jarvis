@@ -8,6 +8,10 @@ from main_graph import app as jarvis_app, State
 
 flask_app = Flask(__name__)
 METRICS = {"started_at": time.time(), "decisions": 0, "actions": 0, "errors": 0, "last_error": ""}
+MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
+MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL_SEC", "60"))
+MONITOR_FAIL_THRESHOLD = int(os.getenv("MONITOR_FAIL_THRESHOLD", "2"))
+_monitor_fail_count = 0
 
 # Telegram Bot Configuration and Auth
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -53,6 +57,29 @@ def reset_telegram_webhook():
 def ensure_webhook_if_configured():
     if not TELEGRAM_TOKEN:
         return False
+
+def _monitor_loop():
+    global _monitor_fail_count
+    print("🩺 Monitor loop starting...")
+    while True:
+        try:
+            r = requests.get("http://127.0.0.1:" + str(int(os.environ.get("PORT", 5000))) + "/health", timeout=10)
+            ok = r.ok and r.json().get("status") == "healthy"
+            if ok:
+                _monitor_fail_count = 0
+                METRICS["monitor_last_ok"] = time.time()
+            else:
+                _monitor_fail_count += 1
+        except Exception as e:
+            _monitor_fail_count += 1
+            METRICS["last_error"] = f"monitor: {e}"
+        if _monitor_fail_count >= MONITOR_FAIL_THRESHOLD:
+            try:
+                send_telegram_message("⚠️ Health check failing consecutively. Investigate deployment.", TELEGRAM_CHAT_ID)
+                _monitor_fail_count = 0
+            except Exception:
+                pass
+        time.sleep(MONITOR_INTERVAL)
     secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
     base = os.getenv("APP_BASE_URL", "").strip()
     if not secret or not base:
@@ -192,6 +219,9 @@ if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
         send_telegram_message("I am awake and listening. How can I serve you today?", TELEGRAM_CHAT_ID)
     except Exception:
         pass
+    # Optional health monitor
+    if MONITOR_ENABLED:
+        threading.Thread(target=_monitor_loop, daemon=True).start()
 
 # Minimal web server for Heroku health checks and (optional) Telegram webhook
 @flask_app.route('/')
