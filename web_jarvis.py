@@ -61,6 +61,20 @@ def reset_telegram_webhook():
 def ensure_webhook_if_configured():
     if not TELEGRAM_TOKEN:
         return False
+    secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+    base = os.getenv("APP_BASE_URL", "").strip()
+    if not secret or not base:
+        return False
+    try:
+        url = f"{base.rstrip('/')}/telegram/{secret}"
+        set_url = f"{TELEGRAM_API_URL}/setWebhook"
+        r = requests.post(set_url, json={"url": url, "drop_pending_updates": True}, timeout=10)
+        ok = r.ok and r.json().get("ok", False)
+        print(f"🌐 Telegram webhook {'set' if ok else 'failed'}: {url}")
+        return ok
+    except Exception as e:
+        print(f"Error setting Telegram webhook: {e}")
+        return False
 
 def _monitor_loop():
     global _monitor_fail_count
@@ -84,20 +98,6 @@ def _monitor_loop():
             except Exception:
                 pass
         time.sleep(MONITOR_INTERVAL)
-    secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
-    base = os.getenv("APP_BASE_URL", "").strip()
-    if not secret or not base:
-        return False
-    try:
-        url = f"{base.rstrip('/')}/telegram/{secret}"
-        set_url = f"{TELEGRAM_API_URL}/setWebhook"
-        r = requests.post(set_url, json={"url": url, "drop_pending_updates": True}, timeout=10)
-        ok = r.ok and r.json().get("ok", False)
-        print(f"🌐 Telegram webhook {'set' if ok else 'failed'}: {url}")
-        return ok
-    except Exception as e:
-        print(f"Error setting Telegram webhook: {e}")
-        return False
 
 def process_jarvis_goal(goal, chat_id):
     """Process goal through Jarvis and send result via Telegram"""
