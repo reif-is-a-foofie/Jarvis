@@ -8,9 +8,12 @@ from main_graph import app as jarvis_app, State
 
 flask_app = Flask(__name__)
 
-# Telegram Bot Configuration
+# Telegram Bot Configuration and Auth
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+ALLOWED_CHAT_IDS = set(filter(None, (os.getenv("ALLOWED_CHAT_IDS", "").split(",") if os.getenv("ALLOWED_CHAT_IDS") else [])))
+if TELEGRAM_CHAT_ID:
+    ALLOWED_CHAT_IDS.add(str(TELEGRAM_CHAT_ID))
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 def send_telegram_message(text, chat_id=None):
@@ -55,7 +58,10 @@ def process_jarvis_goal(goal, chat_id):
         # Execute through Jarvis LangGraph
         state = State(goal=goal, context=[], decision={}, log=[])
         # Provide a checkpointer thread_id using the Telegram chat as the thread key
-        result = jarvis_app.invoke(state, config={"configurable": {"thread_id": str(chat_id)}})
+        result = jarvis_app.invoke(
+            state,
+            config={"configurable": {"thread_id": str(chat_id), "checkpoint_ns": "telegram"}}
+        )
         
         # Format response
         decision = result.get("decision", {})
@@ -118,8 +124,8 @@ def telegram_bot_polling():
                 chat_id = str(chat.get("id", ""))
                 text = message.get("text", "")
                 
-                # Only respond to messages from authorized chat
-                if chat_id == TELEGRAM_CHAT_ID and text:
+                # Only respond to messages from authorized chat(s)
+                if (chat_id in ALLOWED_CHAT_IDS) and text:
                     print(f"📨 Received goal: {text}")
                     # Process in background thread
                     threading.Thread(
@@ -142,10 +148,27 @@ if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
     bot_thread.start()
     print("🚀 Jarvis Telegram bot started!")
 
-# Minimal web server for Heroku health checks
+# Minimal web server for Heroku health checks and (optional) Telegram webhook
 @flask_app.route('/')
 def home():
     return "🤖 Jarvis is running! Chat with me on Telegram."
+
+@flask_app.route('/telegram/<token>', methods=['POST'])
+def telegram_webhook(token: str):
+    secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+    if not secret or token != secret:
+        return jsonify({"ok": False}), 403
+    try:
+        update = request.get_json(force=True, silent=True) or {}
+        message = update.get("message", {})
+        chat = message.get("chat", {})
+        chat_id = str(chat.get("id", ""))
+        text = message.get("text", "")
+        if (chat_id in ALLOWED_CHAT_IDS) and text:
+            threading.Thread(target=process_jarvis_goal, args=(text, chat_id), daemon=True).start()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @flask_app.route('/health')
 def health():

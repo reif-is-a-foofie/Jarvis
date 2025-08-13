@@ -25,7 +25,12 @@ COLL="jarvis"
 def _ensure_retrieval_ready() -> None:
     global q, emb
     if q is None:
-        q = QdrantClient(":memory:")
+        qdrant_url = os.getenv("QDRANT_URL", "").strip()
+        qdrant_key = os.getenv("QDRANT_API_KEY", "").strip()
+        if qdrant_url:
+            q = QdrantClient(url=qdrant_url, api_key=qdrant_key or None, prefer_grpc=False)
+        else:
+            q = QdrantClient(":memory:")
     if emb is None:
         emb = SentenceTransformer("BAAI/bge-small-en-v1.5")
     try:
@@ -63,9 +68,22 @@ def topk(qry: str, k: int = 5):
 
 # LLM shim (OpenAI SDK JSON)
 
-def call_llm_json(prompt: str) -> Dict[str,Any]:
+def _get_openai_client():
+    # Support proxies via env without using unsupported 'proxies=' kwarg
     from openai import OpenAI
-    cli = OpenAI()
+    proxy = os.getenv("OPENAI_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
+    if proxy:
+        try:
+            import httpx  # type: ignore
+            http_client = httpx.Client(proxies=proxy)
+            return OpenAI(http_client=http_client)
+        except Exception:
+            # Fallback to default client if httpx/proxy setup fails
+            return OpenAI()
+    return OpenAI()
+
+def call_llm_json(prompt: str) -> Dict[str,Any]:
+    cli = _get_openai_client()
     rsp = cli.chat.completions.create(
         model=MODEL.split(":",1)[1] if ":" in MODEL else MODEL,
         messages=[
@@ -78,7 +96,8 @@ def call_llm_json(prompt: str) -> Dict[str,Any]:
     except: return {"type":"FINAL","answer": txt}
 
 def load_tool(modname:str):
-    p = pathlib.Path("tools")/f"{modname.split('.')[-1]}.py"
+    module_stub = modname.split(".", 1)[0]
+    p = pathlib.Path("tools")/f"{module_stub}.py"
     spec = importlib.util.spec_from_file_location(modname, str(p))
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)  # type: ignore
     return mod
