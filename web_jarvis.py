@@ -5,6 +5,7 @@ import threading
 import time
 from flask import Flask, request, jsonify
 from main_graph import app as jarvis_app, State
+from main_graph import ingest as ingest_text
 
 flask_app = Flask(__name__)
 METRICS = {"started_at": time.time(), "decisions": 0, "actions": 0, "errors": 0, "last_error": ""}
@@ -100,6 +101,11 @@ def process_jarvis_goal(goal, chat_id):
     try:
         # Send acknowledgment
         send_telegram_message(f"🤖 *Jarvis Processing:* {goal}", chat_id)
+        # Ingest user message for memory (thread-scoped)
+        try:
+            ingest_text(f"user[{chat_id}]: {goal}", src="chat-user")
+        except Exception:
+            pass
         
         # Execute through Jarvis LangGraph
         state = State(goal=goal, context=[], decision={}, log=[])
@@ -132,6 +138,12 @@ def process_jarvis_goal(goal, chat_id):
         if logs:
             METRICS["actions"] += len(logs)
         send_telegram_message(response, chat_id)
+        # Ingest assistant answer for memory (thread-scoped)
+        try:
+            if decision_type == "FINAL":
+                ingest_text(f"assistant[{chat_id}]: {decision.get('answer','')}\nctx: {state.get('context',[])}", src="chat-assistant")
+        except Exception:
+            pass
         
     except Exception as e:
         error_msg = f"❌ *Error processing goal:*\n{str(e)}"
