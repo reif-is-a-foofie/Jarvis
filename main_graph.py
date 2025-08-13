@@ -157,13 +157,17 @@ Decide ONE; return STRICT JSON:
 """
 
 def decide_node(state: State) -> State:
-    ctx = "\n---\n".join([h["text"] for h in state["context"]])
-    allowed_tools = ", ".join([f'"{t}"' for t in M["guardrails"]["allowed_actions"] if "." in t])
+    # Be robust to mixed types in context payloads
+    ctx = "\n---\n".join([
+        str(h.get("text", "")) if isinstance(h, dict) else str(h)
+        for h in state.get("context", [])
+    ])
+    allowed_tools = ", ".join([f'"{t}"' for t in M.get("guardrails", {}).get("allowed_actions", []) if "." in t])
     p = PROMPT.format(
         header=mentor_header(),
-        mission=M["mission"],
-        principles=", ".join(M["principles"]),
-        guardrails=str(M["guardrails"]),
+        mission=M.get("mission", ""),
+        principles=", ".join([str(x) for x in M.get("principles", [])]),
+        guardrails=str(M.get("guardrails", {})),
         ctx=ctx, goal=state["goal"], allowed_tools=allowed_tools
     )
     decision = call_llm_json(p)
