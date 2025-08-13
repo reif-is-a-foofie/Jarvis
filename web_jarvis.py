@@ -187,6 +187,11 @@ if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
     bot_thread = threading.Thread(target=telegram_bot_polling, daemon=True)
     bot_thread.start()
     print("🚀 Jarvis Telegram bot started!")
+    # One-time boot notification (natural language)
+    try:
+        send_telegram_message("I am awake and listening. How can I serve you today?", TELEGRAM_CHAT_ID)
+    except Exception:
+        pass
 
 # Minimal web server for Heroku health checks and (optional) Telegram webhook
 @flask_app.route('/')
