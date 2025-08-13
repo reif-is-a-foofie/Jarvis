@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import argparse
+import random
 from typing import Dict, Any
 
 import requests
@@ -93,7 +94,7 @@ def test_webhook() -> bool:
         url = f"{base}/telegram/{secret}"
         payload = {
             "update_id": int(time.time()),
-            "message": {"chat": {"id": int(chat_id)}, "text": "smoke from CLI"},
+            "message": {"chat": {"id": int(chat_id)}, "text": f"smoke from CLI {random.randint(100,999)}"},
         }
         r = requests.post(url, json=payload, timeout=10)
         ok = r.ok and r.json().get("ok") is True

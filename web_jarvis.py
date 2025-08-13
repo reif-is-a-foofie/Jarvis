@@ -6,8 +6,10 @@ import time
 from flask import Flask, request, jsonify
 from main_graph import app as jarvis_app, State
 from main_graph import ingest as ingest_text
+import preflight
 
 flask_app = Flask(__name__)
+preflight.ensure()
 METRICS = {"started_at": time.time(), "decisions": 0, "actions": 0, "errors": 0, "last_error": ""}
 MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL_SEC", "60"))

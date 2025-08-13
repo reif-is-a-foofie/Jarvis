@@ -1,4 +1,4 @@
-import os, json, uuid, yaml, subprocess, importlib.util, pathlib
+import os, json, uuid, yaml, subprocess, importlib.util, pathlib, time, random
 from typing import TypedDict, List, Dict, Any
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
@@ -78,17 +78,28 @@ def _get_openai_client():
     return OpenAI()
 
 def call_llm_json(prompt: str) -> Dict[str,Any]:
-    cli = _get_openai_client()
-    rsp = cli.chat.completions.create(
-        model=MODEL.split(":",1)[1] if ":" in MODEL else MODEL,
-        messages=[
-            {"role":"system","content": "You are Jarvis, a Christ-pattern mentor-builder. Use ONLY provided context and obey manifesto guardrails."},
-            {"role":"user","content": prompt}],
-        temperature=0.2)
-    # tolerate plain text; else expect JSON
-    txt = rsp.choices[0].message.content.strip()
-    try: return json.loads(txt)
-    except: return {"type":"FINAL","answer": txt}
+    # bounded retries with jitter; simple circuit breaker via env flag
+    if os.getenv("LLM_CIRCUIT_OPEN", "false").lower() == "true":
+        return {"type":"FINAL","answer":"LLM temporarily unavailable; please try again shortly."}
+    last_err = None
+    for attempt in range(3):
+        try:
+            cli = _get_openai_client()
+            rsp = cli.chat.completions.create(
+                model=MODEL.split(":",1)[1] if ":" in MODEL else MODEL,
+                messages=[
+                    {"role":"system","content": "You are Jarvis, a Christ-pattern mentor-builder. Use ONLY provided context and obey manifesto guardrails."},
+                    {"role":"user","content": prompt}],
+                temperature=0.2)
+            txt = rsp.choices[0].message.content.strip()
+            try:
+                return json.loads(txt)
+            except:
+                return {"type":"FINAL","answer": txt}
+        except Exception as e:
+            last_err = e
+            time.sleep(0.5 + random.random())
+    return {"type":"FINAL","answer": f"LLM error: {last_err}"}
 
 def load_tool(modname:str):
     module_stub = modname.split(".", 1)[0]
