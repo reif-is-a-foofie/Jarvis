@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify
 from main_graph import app as jarvis_app, State
 
 flask_app = Flask(__name__)
+METRICS = {"started_at": time.time(), "decisions": 0, "actions": 0, "errors": 0, "last_error": ""}
 
 # Telegram Bot Configuration and Auth
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -49,6 +50,24 @@ def reset_telegram_webhook():
     except Exception as e:
         print(f"Error clearing Telegram webhook: {e}")
 
+def ensure_webhook_if_configured():
+    if not TELEGRAM_TOKEN:
+        return False
+    secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+    base = os.getenv("APP_BASE_URL", "").strip()
+    if not secret or not base:
+        return False
+    try:
+        url = f"{base.rstrip('/')}/telegram/{secret}"
+        set_url = f"{TELEGRAM_API_URL}/setWebhook"
+        r = requests.post(set_url, json={"url": url, "drop_pending_updates": True}, timeout=10)
+        ok = r.ok and r.json().get("ok", False)
+        print(f"🌐 Telegram webhook {'set' if ok else 'failed'}: {url}")
+        return ok
+    except Exception as e:
+        print(f"Error setting Telegram webhook: {e}")
+        return False
+
 def process_jarvis_goal(goal, chat_id):
     """Process goal through Jarvis and send result via Telegram"""
     try:
@@ -81,11 +100,16 @@ def process_jarvis_goal(goal, chat_id):
         if logs:
             response += f"\n\n📋 *Actions taken:* {len(logs)}"
         
-        # Send result back to Telegram
+        # Update metrics and send result back to Telegram
+        METRICS["decisions"] += 1
+        if logs:
+            METRICS["actions"] += len(logs)
         send_telegram_message(response, chat_id)
         
     except Exception as e:
         error_msg = f"❌ *Error processing goal:*\n{str(e)}"
+        METRICS["errors"] += 1
+        METRICS["last_error"] = str(e)
         send_telegram_message(error_msg, chat_id)
 
 def get_telegram_updates(offset: int | None = None, timeout_seconds: int = 50):
@@ -108,6 +132,10 @@ def get_telegram_updates(offset: int | None = None, timeout_seconds: int = 50):
 def telegram_bot_polling():
     """Poll Telegram for new messages"""
     print("🤖 Jarvis Telegram bot starting...")
+    # If webhook configured, skip polling
+    if ensure_webhook_if_configured():
+        print("📡 Webhook configured; skipping long polling.")
+        return
     reset_telegram_webhook()
     offset: int | None = None
     
@@ -175,7 +203,8 @@ def health():
     return jsonify({
         "status": "healthy", 
         "service": "jarvis-telegram-bot",
-        "telegram_configured": bool(TELEGRAM_TOKEN and TELEGRAM_CHAT_ID)
+        "telegram_configured": bool(TELEGRAM_TOKEN and TELEGRAM_CHAT_ID),
+        "metrics": METRICS
     })
 
 if __name__ == "__main__":

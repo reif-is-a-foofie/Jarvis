@@ -1,0 +1,8 @@
+name: archive.data
+schema:
+  type: object
+  properties:
+    tag: { type: string }
+  required: []
+
+

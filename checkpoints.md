@@ -125,8 +125,8 @@ Backlog TODOs (implementation-ready)
 - [ ] Checkpointer: add Postgres checkpointer when `DATABASE_URL` present; fallback to memory
 - [ ] Vectors: support external Qdrant when `QDRANT_URL` set; fallback to in-memory
 - [ ] Ingest: implement `tools/ingest.py` and `tools/ingest.yaml` (reads local file path only for now)
-- [ ] Archive: implement `tools/archive.py` and `tools/archive.yaml` (tag records as archived)
-- [ ] Finances: implement `tools/track_finances.py` and YAML with minimal CSV ingest + sum by category
+- [x] Archive: implement `tools/archive.py` and `tools/archive.yaml` (tag records as archived)
+- [x] Finances: implement `tools/track_finances.py` and YAML with minimal CSV ingest + sum by category
 - [ ] Tool engine: create `services/tool_engine.py` with `create_tool()` that writes files safely and reloads
 - [ ] Package mgmt: create `services/deps.py` with `propose_dependency_update()` that edits `requirements.txt`
 - [ ] DECIDE: extend allowed tool list in prompt after above tools are safe and tested

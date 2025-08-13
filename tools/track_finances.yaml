@@ -1,0 +1,10 @@
+name: track.finances
+schema:
+  type: object
+  properties:
+    path: { type: string }
+    amount_field: { type: string }
+    category_field: { type: string }
+  required: [path]
+
+
