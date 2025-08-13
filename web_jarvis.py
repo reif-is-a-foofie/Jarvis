@@ -16,6 +16,7 @@ MONITOR_INTERVAL = int(os.getenv("MONITOR_INTERVAL_SEC", "60"))
 MONITOR_FAIL_THRESHOLD = int(os.getenv("MONITOR_FAIL_THRESHOLD", "2"))
 _monitor_fail_count = 0
 ECHO_MODE = os.getenv("ECHO_MODE", "false").lower() == "true"
+API_TOKEN = os.getenv("API_TOKEN", "").strip()
 
 # Telegram Bot Configuration and Auth
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -301,6 +302,47 @@ def health():
         "telegram_configured": bool(TELEGRAM_TOKEN and TELEGRAM_CHAT_ID),
         "metrics": METRICS
     })
+
+# Simple authenticated HTTP API to ask Jarvis questions
+@flask_app.route('/api/chat', methods=['POST'])
+def api_chat():
+    # Auth: Bearer token or X-API-Token header
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip() or request.headers.get('X-API-Token', '').strip() or request.args.get('token', '').strip()
+    if not API_TOKEN or token != API_TOKEN:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    body = request.get_json(force=True, silent=True) or {}
+    text = str(body.get("text", "")).strip()
+    thread_id = str(body.get("thread_id") or "api-session")
+    if not text:
+        return jsonify({"ok": False, "error": "missing_text"}), 400
+    try:
+        # Ingest user message into memory (optional)
+        try:
+            ingest_text(text, src="api-user")
+            from main_graph import ingest as _ingest
+            _ingest(text, src="chat", meta={"thread_id": thread_id, "role": "user", "kind": "user", "ts": time.time()})
+        except Exception:
+            pass
+        # Build state and invoke graph
+        state: State = {"goal": text, "context": [], "decision": {}, "log": []}
+        result = jarvis_app.invoke(
+            state,
+            config={"configurable": {"thread_id": thread_id, "checkpoint_ns": "api"}}
+        )
+        decision = result.get("decision", {})
+        logs = result.get("log", [])
+        METRICS["decisions"] += 1
+        if logs:
+            METRICS["actions"] += len(logs)
+        return jsonify({
+            "ok": True,
+            "decision": decision,
+            "actions": len(logs) if logs else 0
+        })
+    except Exception as e:
+        METRICS["errors"] += 1
+        METRICS["last_error"] = str(e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
