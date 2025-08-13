@@ -15,9 +15,9 @@ def test_chat_webhook_final(monkeypatch):
     monkeypatch.setenv("ECHO_MODE", "false")
 
     # Stub LLM decision to be deterministic FINAL
-    import main_graph
-    importlib.reload(main_graph)
-    monkeypatch.setattr(main_graph, "call_llm_json", lambda prompt: {"type": "FINAL", "answer": "OK"})
+    import main_graph as mg
+    importlib.reload(mg)
+    monkeypatch.setattr(mg, "call_llm_json", lambda prompt: {"type": "FINAL", "answer": "OK"})
 
     # Capture Telegram sends
     sent = []
