@@ -280,7 +280,15 @@ def telegram_webhook(token: str):
         chat_id = str(chat.get("id", ""))
         text = message.get("text", "")
         if (chat_id in ALLOWED_CHAT_IDS) and text:
-            threading.Thread(target=process_jarvis_goal, args=(text, chat_id), daemon=True).start()
+            # Simple command handling for webhook mode
+            if text.strip().startswith("/status"):
+                send_telegram_message(f"Decisions: {METRICS['decisions']}, Actions: {METRICS['actions']}, Errors: {METRICS['errors']}", chat_id)
+                return jsonify({"ok": True})
+            run_sync = os.getenv("TEST_SYNC", "false").lower() == "true"
+            if run_sync:
+                process_jarvis_goal(text, chat_id)
+            else:
+                threading.Thread(target=process_jarvis_goal, args=(text, chat_id), daemon=True).start()
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
