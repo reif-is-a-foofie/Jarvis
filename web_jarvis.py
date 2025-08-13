@@ -104,6 +104,12 @@ def process_jarvis_goal(goal, chat_id):
     try:
         # Send acknowledgment
         send_telegram_message(f"🤖 *Jarvis Processing:* {goal}", chat_id)
+        # Ingest user message into memory
+        try:
+            from main_graph import ingest as _ingest
+            _ingest(goal, src="chat", meta={"thread_id": str(chat_id), "role": "user", "kind": "user", "ts": time.time()})
+        except Exception:
+            pass
         # Ingest user message for memory (thread-scoped)
         try:
             ingest_text(f"user[{chat_id}]: {goal}", src="chat-user")
@@ -141,6 +147,17 @@ def process_jarvis_goal(goal, chat_id):
         if logs:
             response += f"\n\n📋 *Actions taken:* {len(logs)}"
         
+        # Ingest assistant response into memory
+        try:
+            answer_text = None
+            if decision_type == "FINAL":
+                answer_text = decision.get("answer")
+            if answer_text:
+                from main_graph import ingest as _ingest
+                _ingest(answer_text, src="chat", meta={"thread_id": str(chat_id), "role": "assistant", "kind": "assistant", "ts": time.time()})
+        except Exception:
+            pass
+
         # Update metrics and send result back to Telegram
         METRICS["decisions"] += 1
         if logs:

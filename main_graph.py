@@ -1,5 +1,5 @@
 import os, json, uuid, yaml, subprocess, importlib.util, pathlib, time, random
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict, List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
@@ -53,11 +53,17 @@ def _ensure_retrieval_ready() -> None:
             ),
         )
 
-def ingest(txt: str, src: str = "adhoc") -> None:
+def ingest(txt: str, src: str = "adhoc", meta: Optional[Dict[str, Any]] = None) -> None:
     _ensure_retrieval_ready()
     chunks=[txt[i:i+1200] for i in range(0,len(txt),1200)]
     vecs=emb.encode(chunks, normalize_embeddings=True)  # type: ignore[union-attr]
-    pts=[PointStruct(id=str(uuid.uuid4()), vector=vecs[i].tolist(), payload={"chunk":chunks[i],"source":src}) for i in range(len(chunks))]
+    pts=[]
+    for i in range(len(chunks)):
+        payload = {"chunk": chunks[i], "source": src}
+        if meta:
+            # Shallow merge of metadata
+            payload.update(meta)
+        pts.append(PointStruct(id=str(uuid.uuid4()), vector=vecs[i].tolist(), payload=payload))
     q.upsert(collection_name=COLL, points=pts)  # type: ignore[union-attr]
 
 def topk(qry: str, k: int = 5):

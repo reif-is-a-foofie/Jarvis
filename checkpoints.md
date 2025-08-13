@@ -158,6 +158,75 @@ How to chat now
 - Open Telegram and message your Jarvis bot in natural language (no command required). Optionally use `/goal <text>`.
 - Webhook is active; replies should arrive in the chat. Use `/status` for quick metrics.
 
+---
+
+# checkpoints.md – Jarvis Multi-Layer Memory Architecture
+
+## Section 1 – Memory Layer (Reif’s Chats)
+
+Goal: Persist and recall every chat message from Reif and Jarvis for personalized advising.
+
+Ingestion Rules
+- On ANY user message: `{thread_id, role: "user", text, ts}` → embed & store in Qdrant (`kind: "user"`).
+- On ANY assistant message: `{thread_id, role: "assistant", text, ts}` → embed & store (`kind: "assistant"`); save `vector_id` for scoring.
+- On tool execution: compact, redact, embed & store (`kind: "tool"`).
+
+Feedback Logic
+- Detect emoji-only reply (👍, 👎, 😐) → update `score` for last assistant vector in that thread.
+
+Retrieval
+- Search same-thread first, fallback to global; boost 👍, suppress 👎; return mixed context: user, assistant, tool.
+
+Pruning
+- Keep high-score vectors; drop old tool logs first.
+
+Notes
+- Embedding model: BAAI/bge-small-en-v1.5 (stewardship-first); can switch to OpenAI `text-embedding-3-large` later.
+
+## Section 2 – Ingestion Layer (Reif’s Streams)
+
+Goal: Persist structured streams from life (external to chat) for richer advising.
+
+Examples
+- Calendars, notes, journals, tasks; finance logs; project trackers; health metrics; documents/photos (OCR).
+
+Process
+1) Collect via APIs or uploads
+2) Extract text
+3) Chunk 500–1000 tokens
+4) Embed
+5) Store with `{stream_name, kind: "stream", ts, source_metadata}`
+
+Retrieval
+- Merge with chat context when relevant; thread-link when project-specific.
+
+Safeguards
+- Source tags; expiry windows; secret scrubbing before embedding.
+
+## Section 3 – Research Layer (Curated Outer World Data)
+
+Goal: Continuously ingest trusted external world knowledge for context-aware advising.
+
+Sources
+- Curated news, domain APIs, research repos, mission-relevant alerts.
+
+Process
+1) Scheduled pull
+2) Clean & chunk
+3) Embed (consistent model)
+4) Store in separate collection `jarvis_world` with `{source, topic, ts, reliability_score}`
+
+Retrieval
+- Query personal + world in parallel; bias recent/highly-scored items.
+
+Safeguards
+- Reliability ratings; auto-prune stale; separate indices to keep personal distinct.
+
+Unified Self-Learning Behavior
+- Personal layer learns preferences/history; Streams add structured life data; World keeps global awareness.
+- Retrieval blends all three by similarity, scores, and freshness.
+
+
 Acceptance criteria
 - Bot accepts `/goal <text>` and returns a FINAL or ACT/SELF_UPGRADE status + action count
 - State and memory survive dyno restarts when `DATABASE_URL` and `QDRANT_URL` are configured
