@@ -2,7 +2,6 @@ import os, json, uuid, yaml, subprocess, importlib.util, pathlib, time, random
 from typing import TypedDict, List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
-from sentence_transformers import SentenceTransformer
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -19,7 +18,7 @@ class State(TypedDict):
 
 # For Heroku, use in-memory Qdrant client; lazy init to avoid boot timeouts
 q: QdrantClient | None = None
-emb: SentenceTransformer | None = None
+emb: Any | None = None
 COLL="jarvis"
 
 def _ensure_retrieval_ready() -> None:
@@ -32,6 +31,8 @@ def _ensure_retrieval_ready() -> None:
         else:
             q = QdrantClient(":memory:")
     if emb is None:
+        # Lazy import to avoid torch dependency during lightweight tests
+        from sentence_transformers import SentenceTransformer
         emb = SentenceTransformer("BAAI/bge-small-en-v1.5")
     try:
         have=[c.name for c in q.get_collections().collections]  # type: ignore[attr-defined]
@@ -137,6 +138,9 @@ def plan_node(state: State) -> State:
     return {**state, "decision": {"type":"PLAN","plan":plan}}
 
 def retrieve_node(state: State) -> State:
+    # Allow disabling retrieval in tests/CI to avoid heavy deps
+    if os.getenv("DISABLE_RETRIEVAL", "false").lower() == "true":
+        return {**state, "context": []}
     qtext = state["goal"]
     hits = topk(qtext, k=5)
     return {**state, "context": hits}
