@@ -1,1 +1,1 @@
-web: python main_graph.py
+web: python web_jarvis.py

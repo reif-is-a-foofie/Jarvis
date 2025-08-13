@@ -17,27 +17,48 @@ class State(TypedDict):
 
 # Retrieval setup
 
-# For Heroku, use in-memory Qdrant client
-q = QdrantClient(":memory:")
-emb = SentenceTransformer("BAAI/bge-small-en-v1.5")
+# For Heroku, use in-memory Qdrant client; lazy init to avoid boot timeouts
+q: QdrantClient | None = None
+emb: SentenceTransformer | None = None
 COLL="jarvis"
-def ensure():
+
+def _ensure_retrieval_ready() -> None:
+    global q, emb
+    if q is None:
+        q = QdrantClient(":memory:")
+    if emb is None:
+        emb = SentenceTransformer("BAAI/bge-small-en-v1.5")
     try:
-        have=[c.name for c in q.get_collections().collections]
+        have=[c.name for c in q.get_collections().collections]  # type: ignore[attr-defined]
         if COLL not in have:
-            q.recreate_collection(COLL, vectors_config=VectorParams(size=emb.get_sentence_embedding_dimension(), distance=Distance.COSINE))
+            q.recreate_collection(
+                COLL,
+                vectors_config=VectorParams(
+                    size=emb.get_sentence_embedding_dimension(),  # type: ignore[union-attr]
+                    distance=Distance.COSINE,
+                ),
+            )
     except Exception as e:
         print(f"Creating collection: {e}")
-        q.recreate_collection(COLL, vectors_config=VectorParams(size=emb.get_sentence_embedding_dimension(), distance=Distance.COSINE))
-ensure()
-def ingest(txt, src="adhoc"):
+        q.recreate_collection(  # type: ignore[union-attr]
+            COLL,
+            vectors_config=VectorParams(
+                size=emb.get_sentence_embedding_dimension(),  # type: ignore[union-attr]
+                distance=Distance.COSINE,
+            ),
+        )
+
+def ingest(txt: str, src: str = "adhoc") -> None:
+    _ensure_retrieval_ready()
     chunks=[txt[i:i+1200] for i in range(0,len(txt),1200)]
-    vecs=emb.encode(chunks, normalize_embeddings=True)
+    vecs=emb.encode(chunks, normalize_embeddings=True)  # type: ignore[union-attr]
     pts=[PointStruct(id=str(uuid.uuid4()), vector=vecs[i].tolist(), payload={"chunk":chunks[i],"source":src}) for i in range(len(chunks))]
-    q.upsert(collection_name=COLL, points=pts)
-def topk(qry,k=5):
-    v=emb.encode([qry], normalize_embeddings=True)[0].tolist()
-    hits=q.search(collection_name=COLL, query_vector=v, limit=k)
+    q.upsert(collection_name=COLL, points=pts)  # type: ignore[union-attr]
+
+def topk(qry: str, k: int = 5):
+    _ensure_retrieval_ready()
+    v=emb.encode([qry], normalize_embeddings=True)[0].tolist()  # type: ignore[union-attr]
+    hits=q.search(collection_name=COLL, query_vector=v, limit=k)  # type: ignore[union-attr]
     return [{"text":h.payload["chunk"],"score":float(h.score)} for h in hits]
 
 # LLM shim (OpenAI SDK JSON)

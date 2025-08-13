@@ -33,6 +33,19 @@ def send_telegram_message(text, chat_id=None):
         print(f"Error sending Telegram message: {e}")
         return {"error": str(e)}
 
+def reset_telegram_webhook():
+    if not TELEGRAM_TOKEN:
+        return
+    try:
+        requests.post(
+            f"{TELEGRAM_API_URL}/deleteWebhook",
+            json={"drop_pending_updates": True},
+            timeout=10,
+        )
+        print("🔧 Telegram webhook cleared; using long polling.")
+    except Exception as e:
+        print(f"Error clearing Telegram webhook: {e}")
+
 def process_jarvis_goal(goal, chat_id):
     """Process goal through Jarvis and send result via Telegram"""
     try:
@@ -68,14 +81,17 @@ def process_jarvis_goal(goal, chat_id):
         error_msg = f"❌ *Error processing goal:*\n{str(e)}"
         send_telegram_message(error_msg, chat_id)
 
-def get_telegram_updates():
+def get_telegram_updates(offset: int | None = None, timeout_seconds: int = 50):
     """Get new messages from Telegram"""
     if not TELEGRAM_TOKEN:
         return []
     
     try:
         url = f"{TELEGRAM_API_URL}/getUpdates"
-        response = requests.get(url, timeout=10)
+        params = {"timeout": timeout_seconds}
+        if offset is not None:
+            params["offset"] = offset
+        response = requests.get(url, params=params, timeout=timeout_seconds + 5)
         data = response.json()
         return data.get("result", [])
     except Exception as e:
@@ -85,18 +101,17 @@ def get_telegram_updates():
 def telegram_bot_polling():
     """Poll Telegram for new messages"""
     print("🤖 Jarvis Telegram bot starting...")
-    offset = 0
+    reset_telegram_webhook()
+    offset: int | None = None
     
     while True:
         try:
-            updates = get_telegram_updates()
+            updates = get_telegram_updates(offset=offset, timeout_seconds=50)
             
+            last_update_id: int | None = None
             for update in updates:
                 update_id = update.get("update_id", 0)
-                if update_id <= offset:
-                    continue
-                    
-                offset = update_id
+                last_update_id = update_id
                 message = update.get("message", {})
                 chat = message.get("chat", {})
                 chat_id = str(chat.get("id", ""))
@@ -111,6 +126,8 @@ def telegram_bot_polling():
                         args=(text, chat_id),
                         daemon=True
                     ).start()
+            if last_update_id is not None:
+                offset = last_update_id + 1
             
             time.sleep(2)  # Poll every 2 seconds
             
