@@ -1,0 +1,6 @@
+name: compose.apply
+schema:
+  type: object
+  properties:
+    patch: {type: string}   # YAML fragment
+  required: [patch]

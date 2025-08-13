@@ -1,0 +1,7 @@
+name: notify.owner
+schema:
+  type: object
+  properties:
+    text: {type: string}
+    parse_mode: {type: string}
+  required: [text]

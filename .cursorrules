@@ -1,0 +1,8 @@
+# Jarvis Cursor Rules
+
+- Stay focused on the Jarvis-Core MVP described in README.md.
+- Write clean, modular Python 3.11 code following PEP 8.
+- Keep implementations minimal; avoid unnecessary dependencies or features.
+- Ensure every change respects the Manifesto and policy guardrails.
+- Add concise comments and docstrings for clarity.
+- Run tests and linters before committing code.

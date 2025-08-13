@@ -1,0 +1,31 @@
+version: "3.9"
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: always
+    ports: ["6333:6333"]
+    volumes: ["./qdrant:/qdrant/storage"]
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  jarvis:
+    build: .
+    container_name: jarvis
+    restart: always
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      - MODEL=${MODEL:-openai:gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./manifesto.yaml:/app/manifesto.yaml:ro
+      - ./tools:/app/tools:rw
+      - ./logs:/app/logs:rw
+      - ./docker-compose.yml:/app/docker-compose.yml:rw
+      - /var/run/docker.sock:/var/run/docker.sock:rw
