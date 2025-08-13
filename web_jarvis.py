@@ -154,11 +154,23 @@ def telegram_bot_polling():
                 
                 # Only respond to messages from authorized chat(s)
                 if (chat_id in ALLOWED_CHAT_IDS) and text:
-                    print(f"📨 Received goal: {text}")
+                    cmd = text.strip()
+                    if cmd.startswith("/start"):
+                        send_telegram_message("Welcome. Use /goal <text> to set a goal.", chat_id)
+                        continue
+                    if cmd.startswith("/help"):
+                        send_telegram_message("Commands: /goal <text>, /status, /cancel", chat_id)
+                        continue
+                    if cmd.startswith("/status"):
+                        send_telegram_message(f"Decisions: {METRICS['decisions']}, Actions: {METRICS['actions']}, Errors: {METRICS['errors']}", chat_id)
+                        continue
+                    if cmd.startswith("/goal "):
+                        cmd = cmd[len("/goal "):].strip()
                     # Process in background thread
+                    print(f"📨 Received goal: {cmd}")
                     threading.Thread(
                         target=process_jarvis_goal,
-                        args=(text, chat_id),
+                        args=(cmd, chat_id),
                         daemon=True
                     ).start()
             if last_update_id is not None:

@@ -140,18 +140,19 @@ GOAL: {goal}
 Decide ONE; return STRICT JSON:
 
 * FINAL{{"answer": "..."}}
-* ACT{{"tool":"docs.write"|"compose.apply"|"notify.owner","args":{{...}}}}
+* ACT{{"tool": one of [{allowed_tools}], "args":{{...}}}}
 * SELF_UPGRADE{{"patch_yaml":"<yaml fragment>"}}
 """
 
 def decide_node(state: State) -> State:
     ctx = "\n---\n".join([h["text"] for h in state["context"]])
+    allowed_tools = ", ".join([f'"{t}"' for t in M["guardrails"]["allowed_actions"] if "." in t])
     p = PROMPT.format(
         header=mentor_header(),
         mission=M["mission"],
         principles=", ".join(M["principles"]),
         guardrails=str(M["guardrails"]),
-        ctx=ctx, goal=state["goal"]
+        ctx=ctx, goal=state["goal"], allowed_tools=allowed_tools
     )
     decision = call_llm_json(p)
     return {**state, "decision": decision}
